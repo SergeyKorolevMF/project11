@@ -67,6 +67,8 @@ async def cmd_my_team(message: types.Message):
         reply_markup=get_people_keyboard(people)
     )
 
+from aiogram.exceptions import TelegramBadRequest
+
 @router.callback_query(F.data.startswith("person_select:"))
 async def callback_person_select(callback: types.CallbackQuery):
     person_id = int(callback.data.split(":")[1])
@@ -76,10 +78,14 @@ async def callback_person_select(callback: types.CallbackQuery):
         await callback.answer("Сотрудник не найден", show_alert=True)
         return
         
-    await callback.message.edit_text(
-        f"👤 Выбран: <b>{person.name}</b>\nЧто хотите сделать?",
-        reply_markup=get_person_actions_keyboard(person_id)
-    )
+    try:
+        await callback.message.edit_text(
+            f"👤 Выбран: <b>{person.name}</b>\nЧто хотите сделать?",
+            reply_markup=get_person_actions_keyboard(person_id)
+        )
+    except TelegramBadRequest:
+        pass
+        
     await callback.answer()
 
 @router.callback_query(F.data == "back_to_team")
@@ -87,10 +93,14 @@ async def callback_back_to_team(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     people = await Person.filter(user_id=user_id).all()
     
-    await callback.message.edit_text(
-        "👥 <b>Ваша команда:</b>\nВыберите сотрудника:",
-        reply_markup=get_people_keyboard(people)
-    )
+    try:
+        await callback.message.edit_text(
+            "👥 <b>Ваша команда:</b>\nВыберите сотрудника:",
+            reply_markup=get_people_keyboard(people)
+        )
+    except TelegramBadRequest:
+        pass
+        
     await callback.answer()
 
 @router.callback_query(F.data == "add_person_btn")
