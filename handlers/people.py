@@ -16,11 +16,22 @@ async def cmd_add_person(message: types.Message, state: FSMContext):
 
 @router.message(AddPersonState.waiting_for_name)
 async def process_name(message: types.Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Пожалуйста, введите имя текстом.")
+        return
+
     name = message.text.strip()
     user_id = message.from_user.id
     
     # Получаем пользователя из БД
-    user = await User.get(id=user_id)
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        # Редкий случай, если пользователь не нажимал /start
+        user = await User.create(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name
+        )
     
     try:
         # Пытаемся создать
