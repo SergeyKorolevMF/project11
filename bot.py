@@ -13,6 +13,7 @@ from handlers import common, people
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
+
 async def main():
     # Инициализация бота
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -35,9 +36,9 @@ async def main():
         await close_db()
         logging.info("Database connection closed")
 
+
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logging.info("Bot stopped!")
-
