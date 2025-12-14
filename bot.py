@@ -8,7 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 
 from config import BOT_TOKEN
 from database.db import init_db, close_db
-from handlers import common, people
+from handlers import common, people, notes
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -22,6 +22,7 @@ async def main():
     # Регистрация роутеров
     dp.include_router(common.router)
     dp.include_router(people.router)
+    dp.include_router(notes.router)
 
     # Инициализация БД
     await init_db()

@@ -1,5 +1,5 @@
 from tortoise import fields, models
-
+import uuid
 
 class User(models.Model):
     id = fields.BigIntField(pk=True)  # Telegram user ID
@@ -28,3 +28,22 @@ class Person(models.Model):
 
     def __str__(self):
         return self.name
+
+class MeetingNote(models.Model):
+    id = fields.UUIDField(pk=True)
+    person = fields.ForeignKeyField("models.Person", related_name="notes")
+    raw_text = fields.TextField()
+    
+    # Опциональные поля (аналитика)
+    stress_level = fields.IntField(null=True)
+    rat_of_week = fields.TextField(null=True)
+    shark_of_week = fields.TextField(null=True)
+    
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "meeting_notes"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Note for {self.person_id} at {self.created_at}"
