@@ -1,6 +1,5 @@
 from tortoise import fields, models
 
-
 class User(models.Model):
     id = fields.BigIntField(pk=True)  # Telegram user ID
     username = fields.CharField(max_length=255, null=True)
@@ -12,3 +11,16 @@ class User(models.Model):
 
     def __str__(self):
         return self.username or str(self.id)
+
+class Person(models.Model):
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField('models.User', related_name='people')
+    name = fields.CharField(max_length=255)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "people"
+        unique_together = (("user", "name"),) # Чтобы не создавать дубликатов имен у одного менеджера
+
+    def __str__(self):
+        return self.name
