@@ -3,6 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from database.models import Person, MeetingNote
 from keyboards.people_kb import get_cancel_keyboard, get_person_actions_keyboard
+from services.llm import analyze_note
 
 router = Router()
 
@@ -43,14 +44,47 @@ async def process_note_text(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
+    # Отправляем сообщение об ожидании
+    processing_msg = await message.answer("⏳ Сохраняю и анализирую заметку...")
+
+    # Анализируем с помощью AI
+    analysis = await analyze_note(message.text, custom_prompt=person.custom_prompt)
+    
     # Сохраняем заметку
     await MeetingNote.create(
         person=person,
-        raw_text=message.text
+        raw_text=message.text,
+        ai_summary=analysis,
+        stress_level=analysis.get("mood")
     )
+    
+    # Формируем красивый ответ
+    summary_text = (
+        f"✅ <b>Заметка для {person.name} сохранена!</b>\n\n"
+        f"🤖 <b>AI Анализ:</b>\n"
+        f"Mood: {analysis.get('mood_text', 'N/A')} ({analysis.get('mood', '-')}/10)\n"
+        f"Summary: {analysis.get('summary', '-')}\n"
+    )
+    
+    if analysis.get('positive'):
+        summary_text += f"➕ {analysis.get('positive')}\n"
+    if analysis.get('negative'):
+        summary_text += f"➖ {analysis.get('negative')}\n"
+        
+    todos = analysis.get('action_items', [])
+    if todos:
+        summary_text += "\n📋 <b>Todos:</b>\n"
+        for todo in todos:
+            summary_text += f"▫️ {todo}\n"
+            
+    tags = analysis.get('tags', [])
+    if tags:
+        summary_text += "\n" + " ".join(tags)
 
+    # Удаляем сообщение "Анализирую..." и отправляем результат
+    await processing_msg.delete()
     await message.answer(
-        f"✅ Заметка для <b>{person.name}</b> сохранена!",
+        summary_text,
         reply_markup=get_person_actions_keyboard(person_id)
     )
     await state.clear()

@@ -18,13 +18,18 @@ class Person(models.Model):
     id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="people")
     name = fields.CharField(max_length=255)
+    
+    # AICODE-NOTE: Промпт для анализа заметок по этому человеку.
+    # Если не задан, используется дефолтный.
+    custom_prompt = fields.TextField(null=True)
+    
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         table = "people"
         unique_together = (
             ("user", "name"),
-        )  # Чтобы не создавать дубликатов имен у одного менеджера
+        )
 
     def __str__(self):
         return self.name
@@ -34,10 +39,13 @@ class MeetingNote(models.Model):
     person = fields.ForeignKeyField("models.Person", related_name="notes")
     raw_text = fields.TextField()
     
-    # Опциональные поля (аналитика)
+    # Результат анализа AI (JSON)
+    # Структура: { "mood": 5, "summary": "...", "action_items": [], "tags": [] }
+    ai_summary = fields.JSONField(null=True)
+    
+    # Опциональные поля оставляем как "кэш" или для быстрого доступа, 
+    # хотя они могут дублироваться в JSON
     stress_level = fields.IntField(null=True)
-    rat_of_week = fields.TextField(null=True)
-    shark_of_week = fields.TextField(null=True)
     
     created_at = fields.DatetimeField(auto_now_add=True)
 
