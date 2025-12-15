@@ -14,7 +14,6 @@ class User(models.Model):
         return self.username or str(self.id)
 
 
-
 class Person(models.Model):
     id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="people")
@@ -36,7 +35,6 @@ class Person(models.Model):
         return self.name
 
 
-
 class PromptTemplate(models.Model):
     id = fields.IntField(pk=True)
     user = fields.ForeignKeyField(
@@ -55,7 +53,6 @@ class PromptTemplate(models.Model):
 
     def __str__(self):
         return self.name
-
 
 
 class MeetingNote(models.Model):

@@ -146,7 +146,7 @@ async def callback_add_note(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.message.answer(
         f"Напишите заметку для <b>{person.name}</b>:",
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_cancel_keyboard(),
     )
     await state.set_state(NoteState.waiting_for_text)
     await callback.answer()
@@ -183,7 +183,7 @@ async def process_note_text(message: types.Message, state: FSMContext):
         person=person,
         raw_text=message.text,
         ai_summary=analysis,
-        stress_level=analysis.get("mood")
+        stress_level=analysis.get("mood"),
     )
 
     summary_text = _render_note_report(

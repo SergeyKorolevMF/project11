@@ -90,6 +90,7 @@ async def process_name(message: types.Message, state: FSMContext):
 
     await state.clear()
 
+
 @router.message(Command("my_team"))
 async def cmd_my_team(message: types.Message):
     user_id = message.from_user.id
@@ -105,8 +106,9 @@ async def cmd_my_team(message: types.Message):
 
     await message.answer(
         "📅 <b>Ваши встречи:</b>\nВыберите встречу для работы:",
-        reply_markup=get_people_keyboard(people)
+        reply_markup=get_people_keyboard(people),
     )
+
 
 @router.callback_query(F.data.startswith("person_select:"))
 async def callback_person_select(callback: types.CallbackQuery):
@@ -120,12 +122,13 @@ async def callback_person_select(callback: types.CallbackQuery):
     try:
         await callback.message.edit_text(
             f"📅 Выбрано: <b>{person.name}</b>\nЧто хотите сделать?",
-            reply_markup=get_person_actions_keyboard(person_id)
+            reply_markup=get_person_actions_keyboard(person_id),
         )
     except TelegramBadRequest:
         pass
 
     await callback.answer()
+
 
 @router.callback_query(F.data == "back_to_team")
 async def callback_back_to_team(callback: types.CallbackQuery):
@@ -135,12 +138,13 @@ async def callback_back_to_team(callback: types.CallbackQuery):
     try:
         await callback.message.edit_text(
             "📅 <b>Ваши встречи:</b>\nВыберите встречу:",
-            reply_markup=get_people_keyboard(people)
+            reply_markup=get_people_keyboard(people),
         )
     except TelegramBadRequest:
         pass
 
     await callback.answer()
+
 
 @router.callback_query(F.data == "add_person_btn")
 async def callback_add_person_btn(callback: types.CallbackQuery, state: FSMContext):

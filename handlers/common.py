@@ -18,8 +18,8 @@ async def cmd_start(message: types.Message):
         id=user_id,
         defaults={
             "username": username,
-            "full_name": full_name
-        }
+            "full_name": full_name,
+        },
     )
 
     # Если пользователь уже был, обновляем данные (например, если сменил ник)

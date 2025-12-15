@@ -65,4 +65,3 @@ def get_cancel_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="❌ Отмена", callback_data="cancel_action")
     return builder.as_markup()
-
