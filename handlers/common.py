@@ -1,6 +1,8 @@
-from aiogram import Router, types
-from aiogram.filters import CommandStart
-from database.models import User
+from aiogram import F, Router, types
+from aiogram.filters import Command, CommandStart
+
+from database.models import Person, User
+from keyboards.main_menu import MAIN_MENU_BUTTONS, get_main_menu_keyboard
 
 router = Router()
 
@@ -27,11 +29,100 @@ async def cmd_start(message: types.Message):
             await user.save()
 
     welcome_text = (
-        f"Привет, {full_name}! 👋\n\n"
-        "Я бот для ведения заметок со встреч. Я помогу тебе структурировать "
-        "информацию о твоих 1-1 и командных синках.\n\n"
-        "Я уже сохранил тебя в базе данных."
+        f"Привет, {full_name}!\n\n"
+        "Я помогу быстро сохранять заметки по 1‑1/встречам и показывать "
+        "структурированный AI‑разбор.\n\n"
+        "Начни с добавления людей (если их ещё нет), затем — добавляй заметки "
+        "через меню."
     )
-    
-    await message.answer(welcome_text)
 
+    await message.answer(welcome_text, reply_markup=get_main_menu_keyboard())
+
+    people_count = await Person.filter(user_id=user_id).count()
+    if people_count == 0:
+        await message.answer(
+            "Похоже, у тебя пока нет ни одного человека.\n"
+            "Нажми **👥 Люди** → **➕ Добавить нового** или введи команду "
+            "/add_person.",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown",
+        )
+
+
+@router.message(Command("help"))
+async def cmd_help(message: types.Message):
+    text = (
+        "❓ <b>Помощь</b>\n\n"
+        "Самое простое — пользоваться кнопками меню снизу.\n\n"
+        "<b>Команды</b>:\n"
+        "/start — перезапустить приветствие\n"
+        "/my_team — список людей\n"
+        "/add_person — добавить человека\n\n"
+        "<b>Как добавить заметку</b>:\n"
+        "👥 Люди → выбрать человека → 📝 Добавить заметку\n"
+    )
+    await message.answer(text, reply_markup=get_main_menu_keyboard())
+
+
+@router.message(F.text.in_(MAIN_MENU_BUTTONS))
+async def main_menu_router(message: types.Message):
+    """
+    Роутинг по reply-меню. Команды остаются доступными всегда.
+    """
+    label = (message.text or "").strip()
+
+    if label in ("👥 Люди", "➕ Заметка"):
+        # Показываем список людей (там же можно добавить заметку через действия человека).
+        # Дублируем логику /my_team, чтобы меню работало без знания команд.
+        user_id = message.from_user.id
+        people = await Person.filter(user_id=user_id).all()
+        if not people:
+            await message.answer(
+                "В вашей команде пока никого нет. Нажмите /add_person или "
+                "добавьте через кнопку ниже.",
+                reply_markup=get_main_menu_keyboard(),
+            )
+            return
+
+        # AICODE-NOTE: Локальный импорт, чтобы избежать циклических импортов.
+        from keyboards.people_kb import get_people_keyboard
+
+        await message.answer(
+            "👥 <b>Ваша команда:</b>\nВыберите сотрудника для работы:",
+            reply_markup=get_people_keyboard(people),
+        )
+        return
+
+    if label == "🕘 История":
+        # Быстрый вход: показываем список людей, далее история доступна из действий человека.
+        user_id = message.from_user.id
+        people = await Person.filter(user_id=user_id).all()
+        if not people:
+            await message.answer(
+                "Пока нет людей и заметок. Добавь человека через /add_person.",
+                reply_markup=get_main_menu_keyboard(),
+            )
+            return
+
+        # AICODE-NOTE: Локальный импорт, чтобы избежать циклических импортов.
+        from keyboards.people_kb import get_people_keyboard
+
+        await message.answer(
+            "🕘 Выберите человека, чтобы посмотреть историю заметок:",
+            reply_markup=get_people_keyboard(people),
+        )
+        return
+
+    if label == "⚙️ Настройки":
+        await message.answer(
+            "⚙️ <b>Настройки</b>\n\n"
+            "Пока здесь минимум. Скоро добавим:\n"
+            "- дефолтный промпт\n"
+            "- интеграции (Todoist/Calendar)\n",
+            reply_markup=get_main_menu_keyboard(),
+        )
+        return
+
+    if label == "❓ Помощь":
+        await cmd_help(message)
+        return
