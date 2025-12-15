@@ -18,6 +18,58 @@ router = Router()
 
 HISTORY_PAGE_SIZE = 5
 
+PROMPT_DISABLED_PREFIX = "[DISABLED]\n"
+
+
+def _effective_custom_prompt(custom_prompt: str | None) -> str | None:
+    if not custom_prompt:
+        return None
+    if custom_prompt.startswith(PROMPT_DISABLED_PREFIX):
+        return None
+    return custom_prompt
+
+
+def _meeting_tag(name: str) -> str:
+    raw = (name or "").strip().replace(" ", "_")
+    safe = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in raw)
+    return f"#{safe}" if safe else "#meeting"
+
+
+def _render_note_report(
+    *,
+    title: str,
+    meeting_name: str,
+    raw_text: str,
+    analysis: dict,
+) -> str:
+    raw_preview = html.escape(raw_text or "")
+    text = (
+        f"✅ <b>{title}: {meeting_name}</b>\n\n"
+        f"📝 <b>Исходный текст:</b>\n"
+        f"<pre>{raw_preview}</pre>\n\n"
+        f"🤖 <b>Разбор:</b>\n"
+        f"Mood: {analysis.get('mood_text', 'N/A')} "
+        f"({analysis.get('mood', '-')}/10)\n"
+        f"Summary: {analysis.get('summary', '-')}\n"
+    )
+
+    if analysis.get("positive"):
+        text += f"➕ {analysis.get('positive')}\n"
+    if analysis.get("negative"):
+        text += f"➖ {analysis.get('negative')}\n"
+
+    todos = analysis.get("action_items", [])
+    if todos:
+        text += "\n📋 <b>Todos:</b>\n"
+        for todo in todos:
+            text += f"▫️ {todo}\n"
+
+    tags = analysis.get("tags", [])
+    if tags:
+        text += "\n" + " ".join(tags)
+
+    return text
+
 
 def _truncate_one_line(text: str, max_len: int = 28) -> str:
     one_line = " ".join((text or "").split())
@@ -34,7 +86,7 @@ async def _build_history_page(
 ) -> tuple[str, types.InlineKeyboardMarkup] | tuple[str, None]:
     person = await Person.get_or_none(id=person_id)
     if not person or person.user_id != user_id:
-        return "Сотрудник не найден.", None
+        return "Встреча не найдена.", None
 
     total = await MeetingNote.filter(person_id=person_id).count()
     if total == 0:
@@ -89,7 +141,7 @@ async def callback_add_note(callback: types.CallbackQuery, state: FSMContext):
 
     person = await Person.get_or_none(id=person_id)
     if not person:
-        await callback.answer("Человек не найден", show_alert=True)
+        await callback.answer("Встреча не найдена", show_alert=True)
         return
 
     await callback.message.answer(
@@ -110,7 +162,7 @@ async def process_note_text(message: types.Message, state: FSMContext):
 
     person = await Person.get_or_none(id=person_id)
     if not person:
-        await message.answer("Ошибка: сотрудник не найден.")
+        await message.answer("Ошибка: встреча не найдена.")
         await state.clear()
         return
 
@@ -118,7 +170,13 @@ async def process_note_text(message: types.Message, state: FSMContext):
     processing_msg = await message.answer("⏳ Сохраняю и анализирую заметку...")
 
     # Анализируем с помощью AI
-    analysis = await analyze_note(message.text, custom_prompt=person.custom_prompt)
+    analysis = await analyze_note(
+        message.text,
+        custom_prompt=_effective_custom_prompt(person.custom_prompt),
+    )
+
+    # AICODE-NOTE: В тегах оставляем только название встречи для поиска.
+    analysis["tags"] = [_meeting_tag(person.name)]
 
     # Сохраняем заметку
     note = await MeetingNote.create(
@@ -128,29 +186,12 @@ async def process_note_text(message: types.Message, state: FSMContext):
         stress_level=analysis.get("mood")
     )
 
-    # Формируем красивый ответ
-    summary_text = (
-        f"✅ <b>Заметка для {person.name} сохранена!</b>\n\n"
-        f"🤖 <b>AI Анализ:</b>\n"
-        f"Mood: {analysis.get('mood_text', 'N/A')} "
-        f"({analysis.get('mood', '-')}/10)\n"
-        f"Summary: {analysis.get('summary', '-')}\n"
+    summary_text = _render_note_report(
+        title="Заметка сохранена",
+        meeting_name=person.name,
+        raw_text=message.text,
+        analysis=analysis,
     )
-
-    if analysis.get('positive'):
-        summary_text += f"➕ {analysis.get('positive')}\n"
-    if analysis.get('negative'):
-        summary_text += f"➖ {analysis.get('negative')}\n"
-
-    todos = analysis.get('action_items', [])
-    if todos:
-        summary_text += "\n📋 <b>Todos:</b>\n"
-        for todo in todos:
-            summary_text += f"▫️ {todo}\n"
-
-    tags = analysis.get('tags', [])
-    if tags:
-        summary_text += "\n" + " ".join(tags)
 
     # Удаляем сообщение "Анализирую..." и отправляем результат
     await processing_msg.delete()
@@ -221,33 +262,21 @@ async def process_note_edit(message: types.Message, state: FSMContext):
     processing_msg = await message.answer("⏳ Обновляю и пересчитываю AI‑разбор...")
 
     note.raw_text = message.text
-    analysis = await analyze_note(message.text, custom_prompt=note.person.custom_prompt)
+    analysis = await analyze_note(
+        message.text,
+        custom_prompt=_effective_custom_prompt(note.person.custom_prompt),
+    )
+    analysis["tags"] = [_meeting_tag(note.person.name)]
     note.ai_summary = analysis
     note.stress_level = analysis.get("mood")
     await note.save()
 
-    summary_text = (
-        f"✅ <b>Заметка для {note.person.name} обновлена!</b>\n\n"
-        f"🤖 <b>AI Анализ:</b>\n"
-        f"Mood: {analysis.get('mood_text', 'N/A')} "
-        f"({analysis.get('mood', '-')}/10)\n"
-        f"Summary: {analysis.get('summary', '-')}\n"
+    summary_text = _render_note_report(
+        title="Заметка обновлена",
+        meeting_name=note.person.name,
+        raw_text=message.text,
+        analysis=analysis,
     )
-
-    if analysis.get("positive"):
-        summary_text += f"➕ {analysis.get('positive')}\n"
-    if analysis.get("negative"):
-        summary_text += f"➖ {analysis.get('negative')}\n"
-
-    todos = analysis.get("action_items", [])
-    if todos:
-        summary_text += "\n📋 <b>Todos:</b>\n"
-        for todo in todos:
-            summary_text += f"▫️ {todo}\n"
-
-    tags = analysis.get("tags", [])
-    if tags:
-        summary_text += "\n" + " ".join(tags)
 
     await processing_msg.delete()
     await message.answer(
@@ -279,33 +308,21 @@ async def callback_note_reanalyze(callback: types.CallbackQuery):
         return
 
     await callback.answer("⏳ Пересчитываю…")
-    analysis = await analyze_note(note.raw_text, custom_prompt=note.person.custom_prompt)
+    analysis = await analyze_note(
+        note.raw_text,
+        custom_prompt=_effective_custom_prompt(note.person.custom_prompt),
+    )
+    analysis["tags"] = [_meeting_tag(note.person.name)]
     note.ai_summary = analysis
     note.stress_level = analysis.get("mood")
     await note.save()
 
-    summary_text = (
-        f"✅ <b>AI‑разбор обновлён ({note.person.name})</b>\n\n"
-        f"🤖 <b>AI Анализ:</b>\n"
-        f"Mood: {analysis.get('mood_text', 'N/A')} "
-        f"({analysis.get('mood', '-')}/10)\n"
-        f"Summary: {analysis.get('summary', '-')}\n"
+    summary_text = _render_note_report(
+        title="AI‑разбор обновлён",
+        meeting_name=note.person.name,
+        raw_text=note.raw_text,
+        analysis=analysis,
     )
-
-    if analysis.get("positive"):
-        summary_text += f"➕ {analysis.get('positive')}\n"
-    if analysis.get("negative"):
-        summary_text += f"➖ {analysis.get('negative')}\n"
-
-    todos = analysis.get("action_items", [])
-    if todos:
-        summary_text += "\n📋 <b>Todos:</b>\n"
-        for todo in todos:
-            summary_text += f"▫️ {todo}\n"
-
-    tags = analysis.get("tags", [])
-    if tags:
-        summary_text += "\n" + " ".join(tags)
 
     await callback.message.edit_text(
         summary_text,
@@ -378,7 +395,7 @@ async def callback_note_view(callback: types.CallbackQuery):
 
     person = await Person.get_or_none(id=person_id)
     if not person or person.user_id != callback.from_user.id:
-        await callback.answer("Сотрудник не найден", show_alert=True)
+        await callback.answer("Встреча не найдена", show_alert=True)
         return
 
     note = await MeetingNote.get_or_none(id=note_id)
