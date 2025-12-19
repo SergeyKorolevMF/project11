@@ -75,6 +75,23 @@ project/
     Вход: Текст заметки + System Prompt (Default или Custom).
     Выход: JSON с полями mood, summary, action_items.
 
-## Развертывание
-*   Локально для разработки: `python bot.py` (использует SQLite по умолчанию).
-*   С PostgreSQL: Запустить `docker-compose up -d`, раскомментировать `DATABASE_URL` в `config.py`.
+## Развертывание (Deployment)
+
+### Локально для разработки
+1.  Установите зависимости: `pip install -r requirements.txt`.
+2.  Создайте `.env` на основе `env.example`.
+3.  Запустите: `python bot.py` (использует SQLite по умолчанию).
+
+### Через Docker (Рекомендуется для Prod)
+1.  Установите Docker и Docker Compose.
+2.  Создайте `.env` и заполните `BOT_TOKEN` и `OPENAI_API_KEY`.
+3.  Запустите все сервисы:
+    ```bash
+    docker compose up -d --build
+    ```
+4.  Бот будет автоматически ждать готовности базы данных и запустится.
+
+### Полезные команды
+*   Просмотр логов бота: `docker compose logs -f bot`.
+*   Остановка: `docker compose down`.
+*   Пересборка: `docker compose build`.

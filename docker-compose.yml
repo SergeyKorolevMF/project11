@@ -5,13 +5,32 @@ services:
     image: postgres:15-alpine
     restart: always
     environment:
-      POSTGRES_USER: vibe_user
-      POSTGRES_PASSWORD: vibe_password
-      POSTGRES_DB: vibe_tracker
+      POSTGRES_USER: ${DB_USER:-vibe_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-vibe_password}
+      POSTGRES_DB: ${DB_NAME:-vibe_tracker}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibe_user -d vibe_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: .
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgres://${DB_USER:-vibe_user}:${DB_PASSWORD:-vibe_password}@db:5432/${DB_NAME:-vibe_tracker}
+    volumes:
+      - .:/app
+    # AICODE-NOTE: В проде лучше убрать монтирование тома или ограничить его
 
 volumes:
   postgres_data:
